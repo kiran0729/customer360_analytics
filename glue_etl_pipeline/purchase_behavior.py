@@ -11,28 +11,31 @@ from pyspark.sql import DataFrame
 from datetime import datetime
 import logging
 
-# Parse job arguments
-args = getResolvedOptions(sys.argv, ['JOB_NAME', 'S3_TARGET_PATH', 'INPUT_DB', 'OUTPUT_DB'])
 
 
+def getSparkContext():
+    # Parse job arguments
+    args = getResolvedOptions(sys.argv, ['JOB_NAME', 'S3_TARGET_PATH', 'INPUT_DB','OUTPUT_DB'])
 
-# Initialize Spark and Glue Context
-sc = SparkContext()
-glueContext = GlueContext(sc)
-spark = glueContext.spark_session
-job = Job(glueContext)
-job.init(args["JOB_NAME"], args)
-s3_output_path =args['S3_TARGET_PATH'] +args["JOB_NAME"]
-input_db = args['INPUT_DB']
-output_db = args['OUTPUT_DB']
+    sc = SparkContext()
+    glueContext = GlueContext(sc)
+    spark = glueContext.spark_session
+    job = Job(glueContext)
+    job.init(args["JOB_NAME"], args)
 
+    s3_output_path = args['S3_TARGET_PATH'] + args["JOB_NAME"]
+    bronze_db = args['INPUT_DB']
+    output_db = args['OUTPUT_DB']
 
-# Initialize Logger
-logger =  logging.getLogger("glue_etl_pipeline")
-logger.setLevel(logging.INFO)
+    # Initialize Logger
+    logger =  logging.getLogger("glue_etl_pipeline")
+    logger.setLevel(logging.INFO)
+
+    return spark, job, args, s3_output_path, bronze_db,output_db, logger
 
 def run_etl():
     try:
+        spark, job, args, s3_output_path, input_db,output_db, logger = getSparkContext()
         start_time = datetime.now()
         print("Staring ETL Job      ---   " +args["JOB_NAME"])
 
