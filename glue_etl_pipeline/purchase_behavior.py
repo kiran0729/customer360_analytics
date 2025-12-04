@@ -48,13 +48,13 @@ def run_etl():
 
         customer_df.show()
         
-        #common tranformation 
+        # SQL transformation 
         top_customers=transform_top_customers_sql(spark)
  
         #top_customers=transform_dataframe(order_df,customer_df)
 
         
-        #write_to_s3(top_customers,s3_output_path)
+        # write  gold catalog 
         write_to_s3_create_table(top_customers,s3_output_path,output_db,args["JOB_NAME"])
 
         end_time = datetime.now()
@@ -97,7 +97,7 @@ def transform_top_customers_sql(spark):
                     FROM customer_spending cs
                     JOIN customers c ON cs.customer_id = c.customer_id
                 )
-                SELECT * FROM customer_ranking WHERE spending_rank <= 10 and country like 'United %';
+                SELECT * FROM customer_ranking WHERE spending_rank <= 10 
                      
 
 
