@@ -142,3 +142,7 @@ def write_to_s3_create_table(df: DataFrame,s3_path: str,output_db: str, tableNam
     df.write.mode(mode).format(format).save(s3_path)
     df.write.format(format) .mode(mode) .option("path", s3_path).saveAsTable(f"{output_db}.{tableName}")
     print(f"Write data to S3 Completed: {s3_path}")
+
+
+if __name__ == "__main__":
+    run_etl()
