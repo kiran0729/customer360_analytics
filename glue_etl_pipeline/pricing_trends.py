@@ -9,12 +9,15 @@ from pyspark.sql import functions as F
 from pyspark.sql.functions import col, avg, sum, date_format, year, month,count,when,max
 from pyspark.sql.window import Window
 from pyspark.sql.functions import year,month
-from glue_etl_pipeline.utils import get_glue_logger,write_to_s3
-
+#from glue_etl_pipeline.utils import get_glue_logger,write_to_s3
+from pyspark.sql import DataFrame
+from datetime import datetime
+import logging
 
 # Parse job arguments
-args = getResolvedOptions(sys.argv, ['JOB_NAME', 'S3_TARGET_PATH', 'INPUT_DB'])
+args = getResolvedOptions(sys.argv, ['JOB_NAME', 'S3_TARGET_PATH', 'INPUT_DB','OUTPUT_DB'])
 bronze_db = args['INPUT_DB']
+output_db = args['OUTPUT_DB']
 
 # Initialize Spark and Glue Context
 sc = SparkContext()
@@ -25,7 +28,8 @@ job.init(args["JOB_NAME"], args)
 s3_output_path =args['S3_TARGET_PATH'] +args["JOB_NAME"]
 
 # Initialize Logger
-logger = get_glue_logger()
+logger =  logging.getLogger("glue_etl_pipeline")
+logger.setLevel(logging.INFO)
 
 def run_etl():
     try:
@@ -40,12 +44,19 @@ def run_etl():
         order_items_df.createOrReplaceTempView("order_items") 
         (peak_sales_months,top_customers,customer_purchase_trend_df,retention_rate_pct,month_over_month_growth_pct,yoy_comparison_df,customer_segmented) = transform_sql(customer_df,order_df,products_df,order_items_df)
 
-        write_to_s3(peak_sales_months,s3_output_path + "/peak_sales_months")
-        write_to_s3(top_customers,s3_output_path + "/top_customers")
-        write_to_s3(customer_purchase_trend_df,s3_output_path + "/customer_purchase_trend")
-        write_to_s3(retention_rate_pct,s3_output_path + "/retention_rate_pct")
-        write_to_s3(month_over_month_growth_pct,s3_output_path + "/month_over_month_growth_pct")
-        write_to_s3(yoy_comparison_df,s3_output_path + "/yoy_comparison")
+        #write_to_s3(peak_sales_months,s3_output_path + "/peak_sales_months")
+        write_to_s3_create_table(peak_sales_months,s3_output_path + "/peak_sales_months",output_db,args["JOB_NAME"]+'_'+'peak_sales_months')
+        #write_to_s3(top_customers,s3_output_path + "/top_customers")
+        write_to_s3_create_table(top_customers,s3_output_path + "/top_customers",output_db,args["JOB_NAME"]+'_'+'top_customers')
+        #write_to_s3(customer_purchase_trend_df,s3_output_path + "/customer_purchase_trend")
+        write_to_s3_create_table(customer_purchase_trend_df,s3_output_path + "/customer_purchase_trend",output_db,args["JOB_NAME"]+'_'+'customer_purchase_trend')
+        #write_to_s3(retention_rate_pct,s3_output_path + "/retention_rate_pct")
+        write_to_s3_create_table(retention_rate_pct,s3_output_path + "/retention_rate_pct",output_db,args["JOB_NAME"]+'_'+'retention_rate_pct')
+        #write_to_s3(month_over_month_growth_pct,s3_output_path + "/month_over_month_growth_pct")
+        write_to_s3_create_table(month_over_month_growth_pct,s3_output_path + "/month_over_month_growth_pct",output_db,args["JOB_NAME"]+'_'+'month_over_month_growth_pct')
+
+        #write_to_s3(yoy_comparison_df,s3_output_path + "/yoy_comparison")
+        write_to_s3_create_table(yoy_comparison_df,s3_output_path + "/yoy_comparison",output_db,args["JOB_NAME"]+'_'+'yoy_comparison')
         customer_segmented.createOrReplaceTempView("customer_segmented")
         print("ETL Job Completed Successfully")
     except Exception as e:
@@ -315,3 +326,15 @@ def transform_sql(customer_df,order_df,products_df,order_items_df):
 def transform_dataframe(order_df,products_df,order_items_df):
 
     return ()
+
+def write_to_s3_create_table(df: DataFrame,s3_path: str,output_db: str, tableName: str, format="parquet", mode="overwrite"):
+    print(f"Write data to S3 Started: {s3_path}")
+    df.show(10)
+    print(df.count())
+    df.write.mode(mode).format(format).save(s3_path)
+    df.write.format(format) .mode(mode) .option("path", s3_path).saveAsTable(f"{output_db}.{tableName}")
+    print(f"Write data to S3 Completed: {s3_path}")
+
+
+if __name__ == "__main__":
+    run_etl()

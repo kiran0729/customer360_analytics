@@ -7,13 +7,13 @@ from awsglue.job import Job
 from awsglue.utils import getResolvedOptions
 from pyspark.sql import functions as F
 from pyspark.sql.window import Window
-from glue_etl_pipeline.utils import get_glue_logger, write_to_s3, write_audit_log
+from pyspark.sql import DataFrame
 from datetime import datetime
-
+import logging
 
 def getSparkContext():
     # Parse job arguments
-    args = getResolvedOptions(sys.argv, ['JOB_NAME', 'S3_TARGET_PATH', 'INPUT_DB'])
+    args = getResolvedOptions(sys.argv, ['JOB_NAME', 'S3_TARGET_PATH', 'INPUT_DB','OUTPUT_DB'])
 
     sc = SparkContext()
     glueContext = GlueContext(sc)
@@ -23,15 +23,17 @@ def getSparkContext():
 
     s3_output_path = args['S3_TARGET_PATH'] + args["JOB_NAME"]
     bronze_db = args['INPUT_DB']
+    output_db = args['OUTPUT_DB']
 
     # Initialize Logger
-    logger = get_glue_logger()
+    logger =  logging.getLogger("glue_etl_pipeline")
+    logger.setLevel(logging.INFO)
 
-    return spark, job, args, s3_output_path, bronze_db, logger
+    return spark, job, args, s3_output_path, bronze_db,output_db, logger
 
 
 def run_etl():
-    spark, job, args, s3_output_path, bronze_db, logger = getSparkContext()
+    spark, job, args, s3_output_path, bronze_db,output_db, logger = getSparkContext()
 
     start_time = datetime.now()
     try:
@@ -42,7 +44,8 @@ def run_etl():
         churn_risk = transform_sql(spark)
         # churn_risk = transform_dataframe(order_df)
 
-        write_to_s3(churn_risk, s3_output_path)
+        #write_to_s3(churn_risk, s3_output_path)
+        write_to_s3_create_table(churn_risk,s3_output_path,output_db,args["JOB_NAME"])
 
         end_time = datetime.now()
         #write_audit_log(spark, args['JOB_NAME'],s3_output_path, "SUCCESS", churn_risk.count(), start_time, end_time)
@@ -114,3 +117,17 @@ def transform_dataframe(order_df):
 
     churn_risk_filtered.show(10)
     return churn_risk_filtered
+
+
+
+def write_to_s3_create_table(df: DataFrame,s3_path: str,output_db: str, tableName: str, format="parquet", mode="overwrite"):
+    print(f"Write data to S3 Started: {s3_path}")
+    df.show(10)
+    print(df.count())
+    df.write.mode(mode).format(format).save(s3_path)
+    df.write.format(format) .mode(mode) .option("path", s3_path).saveAsTable(f"{output_db}.{tableName}")
+    print(f"Write data to S3 Completed: {s3_path}")
+
+
+if __name__ == "__main__":
+    run_etl()

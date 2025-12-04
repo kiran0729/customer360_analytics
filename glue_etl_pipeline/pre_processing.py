@@ -5,13 +5,17 @@ from pyspark.sql import SparkSession
 from awsglue.context import GlueContext
 from awsglue.job import Job
 from awsglue.utils import getResolvedOptions
-from transformations.customer_ranking import transform_top_customers_sql, transform_dataframe    
-from glue_etl_pipeline.utils import get_glue_logger,write_to_s3,write_to_s3_create_table
+from datetime import datetime
+import logging
+from pyspark.sql import DataFrame
+
 
 # Parse job arguments
 args = getResolvedOptions(sys.argv, ['JOB_NAME', 'S3_TARGET_PATH', 'INPUT_DB','OUTPUT_DB'])
 
-
+# Initialize Logger
+logger =  logging.getLogger("glue_etl_pipeline")
+logger.setLevel(logging.INFO)
 
 # Initialize Spark and Glue Context
 sc = SparkContext()
@@ -22,11 +26,10 @@ job.init(args["JOB_NAME"], args)
 s3_output_path =args['S3_TARGET_PATH'] +args["JOB_NAME"]
 bronze_db = args['INPUT_DB']
 output_db = args['OUTPUT_DB']
-from glue_etl_pipeline.utils import get_glue_logger,write_to_s3,write_audit_log
-from datetime import datetime
 
-# Initialize Logger
-logger = get_glue_logger()
+
+
+
 
 def run_etl():
     try:
@@ -52,7 +55,7 @@ def run_etl():
         
 
 
-        #top_customers=transform_dataframe(order_df,customer_df)
+
         product_df = spark.read.table(f"{bronze_db}.products")
         order_items_df = spark.read.table(f"{bronze_db}.order_items")
         loginhistory_df = spark.read.table(f"{bronze_db}.loginhistory")
@@ -79,12 +82,10 @@ def run_etl():
 
         print("ETL Job Completed Successfully")
         end_time = datetime.now()
-        write_audit_log(spark, args['JOB_NAME'],s3_output_path, "SUCCESS", customer_clean_df.count(), start_time, end_time)
 
     except Exception as e:
         end_time = datetime.now()
         print(f"ETL Job Failed: {str(e)}")
-        write_audit_log(spark, args['JOB_NAME'],s3_output_path, "FAILURE", 0, start_time, end_time)
         raise e
     job.commit()
 
@@ -132,3 +133,12 @@ def clean_order_data(spark):
     """
     orders_clean_df = spark.sql(orders_clean_sql)
     return orders_clean_df
+
+
+def write_to_s3_create_table(df: DataFrame,s3_path: str,output_db: str, tableName: str, format="parquet", mode="overwrite"):
+    print(f"Write data to S3 Started: {s3_path}")
+    df.show(10)
+    print(df.count())
+    df.write.mode(mode).format(format).save(s3_path)
+    df.write.format(format) .mode(mode) .option("path", s3_path).saveAsTable(f"{output_db}.{tableName}")
+    print(f"Write data to S3 Completed: {s3_path}")

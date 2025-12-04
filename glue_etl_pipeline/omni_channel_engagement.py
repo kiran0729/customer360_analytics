@@ -8,11 +8,13 @@ from awsglue.utils import getResolvedOptions
 from pyspark.sql import functions as F
 from pyspark.sql.functions import col, count, sum, when, coalesce, desc, date_sub, current_date
 from pyspark.sql.window import Window
-from glue_etl_pipeline.utils import get_glue_logger,write_to_s3
+from pyspark.sql import DataFrame
+from datetime import datetime
+import logging
 
 
 # Parse job arguments
-args = getResolvedOptions(sys.argv, ['JOB_NAME', 'S3_TARGET_PATH', 'INPUT_DB'])
+args = getResolvedOptions(sys.argv, ['JOB_NAME', 'S3_TARGET_PATH', 'INPUT_DB','OUTPUT_DB'])
 
 # Initialize Spark and Glue Context
 sc = SparkContext()
@@ -22,9 +24,11 @@ job = Job(glueContext)
 job.init(args["JOB_NAME"], args)
 s3_output_path =args['S3_TARGET_PATH'] +args["JOB_NAME"]
 bronze_db = args['INPUT_DB']
+output_db = args['OUTPUT_DB']
 
 # Initialize Logger
-logger = get_glue_logger()
+logger =  logging.getLogger("glue_etl_pipeline")
+logger.setLevel(logging.INFO)
 
 def run_etl():
     
@@ -62,7 +66,8 @@ def run_etl():
         result_df=transform_sql()
         #result_df=transform_dataframe(order_df,engagement_df,support_df)
 
-        write_to_s3(result_df,s3_output_path)
+        #write_to_s3(result_df,s3_output_path)
+        write_to_s3_create_table(result_df,s3_output_path,output_db,args["JOB_NAME"])
 
         print("ETL Job Completed Successfully")
     except Exception as e:
@@ -209,3 +214,16 @@ def transform_dataframe(order_df,engagement_df,support_df):
 
 
     return final_df
+
+
+def write_to_s3_create_table(df: DataFrame,s3_path: str,output_db: str, tableName: str, format="parquet", mode="overwrite"):
+    print(f"Write data to S3 Started: {s3_path}")
+    df.show(10)
+    print(df.count())
+    df.write.mode(mode).format(format).save(s3_path)
+    df.write.format(format) .mode(mode) .option("path", s3_path).saveAsTable(f"{output_db}.{tableName}")
+    print(f"Write data to S3 Completed: {s3_path}")
+
+
+if __name__ == "__main__":
+    run_etl()
