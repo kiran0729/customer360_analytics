@@ -97,7 +97,7 @@ def transform_top_customers_sql(spark):
                     FROM customer_spending cs
                     JOIN customers c ON cs.customer_id = c.customer_id
                 )
-                SELECT * FROM customer_ranking WHERE spending_rank <= 10 
+                SELECT * FROM customer_ranking WHERE spending_rank <= 11 
                      
 
 
